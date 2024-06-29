@@ -3,6 +3,8 @@
 #include <avr/io.h>
 #include <avr/sleep.h>
 
+#include "header.h"
+
 uint8_t state = 0;
 void setup_timer_rtc() {
   RTC.CLKSEL = RTC_CLKSEL_INT1K_gc;  // 1khz internal
@@ -51,7 +53,7 @@ void setup() {
   sleep_enable();
   attachInterrupt(10, button5, CHANGE);
   // setup_timer_a();
-  // setup_timer_b0();  // use either a or b0
+  // setup_timer_b0();  // use either a0 or b0
   setup_timer_rtc();
   sei();  // Enable global interrupts
 }
@@ -64,6 +66,27 @@ void loop() {
   // digitalWrite(3, 1);
   // delay(1000);
   // digitalWrite(3, 0);
+
+  Serial.begin(9600);
+  pinMode(IRPIN, INPUT);
+  pinMode(BUTTON_LEFT, INPUT_PULLUP);
+  pinMode(BUTTON_MIDDLE, INPUT_PULLUP);
+  pinMode(BUTTON_RIGHT, INPUT_PULLUP);
+  pinMode(LEDPIN, OUTPUT);
+  ledstate = 1;
+  digitalWrite(LEDPIN, ledstate);
+  attachInterrupt(IRPIN, remotex, FALLING);
+  attachInterrupt(BUTTON_LEFT, button_left, FALLING);
+  attachInterrupt(BUTTON_MIDDLE, button_middle, FALLING);
+  attachInterrupt(BUTTON_RIGHT, button_right, FALLING);
+
+  tblink = millis();
+  tdbl = tblink;
+  tdbm = tblink;
+  tdbr = tblink;
+
+  player.begin();
+  player.setVolume(volume);
 }
 
 ISR(RTC_PIT_vect) {  /// 1sec timer  /// 5 sleep and 5 sec awake
