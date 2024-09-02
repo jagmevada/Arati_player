@@ -14,105 +14,95 @@ void setup_timer_rtc() {
   RTC.PITCTRLA = RTC_PERIOD_CYC1024_gc | RTC_PITEN_bm;  // every 2 sec interrupt
   RTC.PITINTCTRL = RTC_PI_bm;                           // enable interrupt
 }
-void button5() {
-  if (digitalRead(10) == HIGH) {
-    state = !state;
-    digitalWrite(3, state);
-  }
-}
+// void button5() {
+//   if (digitalRead(10) == HIGH) {
+//     state = !state;
+//     digitalWrite(3, state);
+//   }
+// }
 
 void setup() {
-  pinMode(3, OUTPUT);
-  digitalWrite(3, LOW);
-  pinMode(0, INPUT_PULLUP);
-  pinMode(1, INPUT_PULLUP);
-  pinMode(2, INPUT_PULLUP);
-  pinMode(5, INPUT_PULLUP);
-  pinMode(4, INPUT_PULLUP);
-  pinMode(6, INPUT_PULLUP);
-  // pinMode(7, INPUT_PULLUP);
-  // pinMode(8, INPUT_PULLUP);
-  // pinMode(9, INPUT_PULLUP);
-  pinMode(10, INPUT);
-  pinMode(7, OUTPUT);
-  pinMode(8, OUTPUT);
-  pinMode(9, OUTPUT);
-  digitalWrite(7, 0);
-  digitalWrite(8, 0);
-  digitalWrite(9, 0);
-  pinMode(11, INPUT_PULLUP);
-  pinMode(12, INPUT_PULLUP);
-  pinMode(13, INPUT_PULLUP);
-  pinMode(14, INPUT_PULLUP);
-  pinMode(15, INPUT_PULLUP);
-  pinMode(16, INPUT_PULLUP);
+  pinMode(0, INPUT_PULLUP);              // 0
+  pinMode(BUTTON_LEFT, INPUT_PULLUP);    // 1 // in PU
+  pinMode(IRPIN, INPUT);                 // 2 // ex PU
+  pinMode(BUTTON_MIDDLE, INPUT_PULLUP);  // 3 // in PU
+  pinMode(MGATE, OUTPUT);                // 4 // ex PD OUT
+  pinMode(CHRGIN, INPUT);                // 5 // ex PD IN
+  pinMode(LEDPIN, OUTPUT);               // 6 // DFLT 0
+  pinMode(BUTTON_RIGHT, INPUT_PULLUP);   // 7 // in PU
+  pinMode(9, INPUT_PULLUP);              // 9
+  pinMode(10, INPUT_PULLUP);             // 10
   ADC0.CTRLA &= ~ADC_ENABLE_bm;
+
+  ledstate = 1;
+  digitalWrite(LEDPIN, ledstate);
+  gatestate = 1;
+  digitalWrite(MGATE, gatestate);
+  // digitalWrite(CHARGEIN, gatestate);
+  attachInterrupt(IRPIN, remotex, FALLING);
+  attachInterrupt(CHRGIN, chargein, CHANGE);
+  attachInterrupt(BUTTON_LEFT, button_left, FALLING);
+  attachInterrupt(BUTTON_MIDDLE, button_middle, FALLING);
+  attachInterrupt(BUTTON_RIGHT, button_right, FALLING);
+
   //   set_sleep_mode(SLEEP_MODE_PWR_DOWN);
   // set_sleep_mode(SLEEP_MODE_IDLE); //380UA
   set_sleep_mode(SLEEP_MODE_STANDBY);
   sleep_enable();
-  attachInterrupt(10, button5, CHANGE);
   // setup_timer_a();
   // setup_timer_b0();  // use either a0 or b0
   setup_timer_rtc();
-  sei();  // Enable global interrupts
-}
 
-void loop() {
-  // put your main code here, to run repeatedly:
-  // ADC0.CTRLA &= ~ADC_ENABLE_bm;
-  sleep_cpu();
-  // delay(1000);
-  // digitalWrite(3, 1);
-  // delay(1000);
-  // digitalWrite(3, 0);
-
-  Serial.begin(9600);
-  pinMode(IRPIN, INPUT);
-  pinMode(BUTTON_LEFT, INPUT_PULLUP);
-  pinMode(BUTTON_MIDDLE, INPUT_PULLUP);
-  pinMode(BUTTON_RIGHT, INPUT_PULLUP);
-  pinMode(LEDPIN, OUTPUT);
-  ledstate = 1;
-  digitalWrite(LEDPIN, ledstate);
-  attachInterrupt(IRPIN, remotex, FALLING);
-  attachInterrupt(BUTTON_LEFT, button_left, FALLING);
-  attachInterrupt(BUTTON_MIDDLE, button_middle, FALLING);
-  attachInterrupt(BUTTON_RIGHT, button_right, FALLING);
+  // Serial.begin(9600);
 
   tblink = millis();
   tdbl = tblink;
   tdbm = tblink;
   tdbr = tblink;
-
+  tdbc = tblink;
+  tplayertime = tblink;
   player.begin();
   player.setVolume(volume);
+
+  sei();  // Enable global interrupts
+}
+
+void loop() {
+  delay(10);
+  if (chargeint) {
+    chargeint = 0;
+    delay(10);
+    chargestate();
+  }
+  check_remote();
+  if (blinkon) {
+    static unsigned char blinkcount = 0;
+    if (millis() - tblink > 20) {
+      blinkcount++;
+      if (ledstate)
+        ledstate = 0;
+      else
+        ledstate = 1;
+      digitalWrite(LEDPIN, ledstate);
+      tblink = millis();
+    }
+    if (blinkcount > 8) {
+      blinkon = 0;
+      ledstate = 1;
+      blinkcount = 0;
+      digitalWrite(LEDPIN, ledstate);
+    }
+  }
+  // sleep_cpu();
 }
 
 ISR(RTC_PIT_vect) {  /// 1sec timer  /// 5 sleep and 5 sec awake
   static unsigned int sec = 5, timercount = sec, xx = 0;
+
   timercount--;
   if (timercount == 0) {
     timercount = sec;
-    xx = !xx;
-    if (xx) {
-      pinMode(7, OUTPUT);
-      pinMode(8, OUTPUT);
-      pinMode(9, OUTPUT);
-
-      sleep_disable();
-    } else {
-      // PORTB_OUT &= ~(PIN0_bm | PIN1_bm | PIN2_bm);
-      // digitalWrite(7, 1);
-      // digitalWrite(8, 1);
-      // digitalWrite(9, 1);
-      pinMode(7, INPUT_PULLUP);  // Only pullup saves power in sleep mode ,
-                                 // output low doesnt
-      pinMode(8, INPUT_PULLUP);
-      pinMode(9, INPUT_PULLUP);
-      sleep_enable();
-    }
-    // digitalWrite(3, xx);
+    chargeint = 1;
   }
   RTC.PITINTFLAGS = RTC_PI_bm; /* Clear the interrupt flag */
 }
